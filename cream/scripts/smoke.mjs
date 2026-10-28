@@ -1,0 +1,34 @@
+import { chromium } from '@playwright/test';
+const out = process.argv[2];
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://localhost:5400/');
+await p.waitForFunction(() => window.cream?.app.getState().ready);
+const id = await p.evaluate(() => window.cream.app.getState().createDesign({ preset: 'instagram-square' }).id);
+await p.goto('http://localhost:5400/#/design/' + id);
+await p.waitForSelector('[data-testid=editor]');
+await p.keyboard.press('r');
+await p.keyboard.press('t');
+await p.waitForTimeout(500);
+// drag the text
+const box = await p.locator('.page-frame [data-el-id]').last().boundingBox();
+await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+await p.mouse.down();
+await p.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 120, { steps: 8 });
+await p.mouse.up();
+await p.waitForTimeout(300);
+await p.screenshot({ path: out + '/editor1.png' });
+// double click to edit text
+const b2 = await p.locator('.page-frame [data-el-id]').last().boundingBox();
+await p.mouse.dblclick(b2.x + b2.width / 2, b2.y + b2.height / 2);
+await p.keyboard.type('Hello Cream');
+await p.mouse.click(5, 300);
+await p.waitForTimeout(300);
+await p.screenshot({ path: out + '/editor2.png' });
+const st = await p.evaluate(() => window.cream.editor.getState().design.pages[0].elements.map((e) => ({ t: e.type, x: Math.round(e.x), y: Math.round(e.y), html: e.html })));
+console.log(JSON.stringify(st));
+console.log('ERRORS', JSON.stringify(errs.slice(0, 10)));
+await b.close();

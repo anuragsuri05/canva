@@ -1,0 +1,21 @@
+import { chromium } from '@playwright/test';
+const out = process.argv[2];
+const tab = process.argv[3] || 'elements';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://localhost:5400/');
+await p.waitForFunction(() => window.cream?.app.getState().ready);
+const id = await p.evaluate(() => window.cream.app.getState().createDesign({ preset: 'instagram-square' }).id);
+await p.goto('http://localhost:5400/#/design/' + id);
+await p.waitForSelector('[data-testid=editor]');
+await p.waitForTimeout(1500);
+await p.evaluate((t) => window.cream.editor.setState({ side: t }), tab);
+await p.waitForTimeout(4000);
+if (process.argv[4]) { await p.evaluate((y) => document.querySelector('.side-panel-body').scrollTop = Number(y), process.argv[4]); await p.waitForTimeout(2500); }
+await p.evaluate(() => document.querySelectorAll('vite-error-overlay').forEach((e) => e.remove()));
+await p.screenshot({ path: `${out}/${tab}.png` });
+console.log('ERRORS', JSON.stringify(errs.slice(0, 10)));
+await b.close();

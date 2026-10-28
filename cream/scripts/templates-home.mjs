@@ -1,0 +1,55 @@
+// Home strips + Templates page top + filters + favorites: node scripts/templates-home.mjs <outdir>
+import { chromium } from '@playwright/test';
+const out = process.argv[2];
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1440, height: 1000 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && !/picsum|Failed to load resource/.test(m.text()) && errs.push(m.text()));
+await p.goto('http://localhost:5400/#/');
+await p.waitForFunction(() => window.cream?.app.getState().ready);
+await p.waitForSelector('[data-testid=template-strip]', { timeout: 15000 }).catch(() => console.log('no strip'));
+await p.waitForTimeout(2500);
+await p.locator('[data-testid=template-strip]').first().scrollIntoViewIfNeeded().catch(() => {});
+await p.waitForTimeout(1500);
+await p.screenshot({ path: `${out}/home-strips.png` });
+await p.evaluate(() => (location.hash = '#/templates'));
+await p.waitForSelector('[data-testid=templates-search]');
+await p.waitForTimeout(2500);
+await p.screenshot({ path: `${out}/tpl-page-top.png` });
+await p.fill('[data-testid=templates-search]', 'wedding invitation');
+await p.waitForTimeout(800);
+console.log('search wedding invitation:', await p.textContent('[data-testid=templates-count]'));
+await p.fill('[data-testid=templates-search]', '');
+await p.selectOption('[data-testid=filter-feature]', 'animated');
+await p.waitForTimeout(500);
+console.log('animated:', await p.textContent('[data-testid=templates-count]'));
+await p.selectOption('[data-testid=filter-color]', 'blue');
+await p.waitForTimeout(500);
+console.log('animated+blue:', await p.textContent('[data-testid=templates-count]'));
+await p.selectOption('[data-testid=filter-feature]', '');
+await p.selectOption('[data-testid=filter-color]', '');
+await p.click('[data-testid=template-category-whiteboard]');
+await p.waitForTimeout(500);
+console.log('whiteboards:', await p.textContent('[data-testid=templates-count]'));
+await p.locator('[data-testid=template-card]').first().click();
+await p.waitForSelector('[data-testid=template-preview]');
+await p.click('[data-testid=favorite-template]');
+await p.waitForTimeout(1500);
+await p.screenshot({ path: `${out}/tpl-preview.png` });
+await p.keyboard.press('Escape');
+await p.click('[data-testid=filter-favorites]');
+await p.waitForTimeout(500);
+console.log('favorites:', await p.textContent('[data-testid=templates-count]'));
+// infinite scroll
+await p.click('[data-testid=filter-favorites]');
+await p.click('[data-testid=template-category-whiteboard]');
+await p.waitForTimeout(500);
+const before = await p.locator('[data-testid=template-card]').count();
+for (let i = 0; i < 4; i++) {
+  await p.mouse.wheel(0, 4000);
+  await p.waitForTimeout(600);
+}
+console.log('cards before/after scroll', before, await p.locator('[data-testid=template-card]').count());
+console.log('ERRORS', JSON.stringify(errs.slice(0, 10)));
+await b.close();

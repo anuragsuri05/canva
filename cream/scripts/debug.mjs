@@ -1,0 +1,13 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+p.on('pageerror', (e) => console.log('PAGEERR', e.message, e.stack?.split('\n').slice(0,4).join(' | ')));
+p.on('console', (m) => console.log('CONSOLE', m.type(), m.text().slice(0, 300)));
+await p.goto('http://localhost:5400/');
+await p.waitForFunction(() => window.cream?.app.getState().ready);
+const id = await p.evaluate(() => window.cream.app.getState().createDesign({ preset: 'instagram-square' }).id);
+await p.evaluate((id) => (location.hash = '#/design/' + id), id);
+await p.waitForTimeout(3000);
+console.log(await p.evaluate(() => document.body.innerText.slice(0, 300)));
+await p.screenshot({ path: process.argv[2] + '/debug.png' });
+await b.close();

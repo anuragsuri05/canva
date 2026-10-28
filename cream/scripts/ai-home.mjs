@@ -1,0 +1,43 @@
+// Cream AI home, AI settings, Code widget (keyless).
+import { chromium } from '@playwright/test';
+const out = process.argv[2] || '.';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://localhost:5400/#/ai');
+await p.waitForFunction(() => window.cream?.app.getState().ready);
+await p.waitForSelector('[data-testid=ai-home]');
+await p.fill('[data-testid=ai-home] [data-testid=ai-prompt]', 'Poster for a weekend farmers market');
+await p.click('[data-testid=ai-home] [data-testid=ai-generate]');
+await p.waitForSelector('[data-testid=ai-home-candidate-0]', { timeout: 30000 });
+await p.waitForTimeout(3000);
+await p.screenshot({ path: out + '/ai-home.png' });
+await p.click('[data-testid=ai-home-candidate-0]');
+await p.waitForSelector('[data-testid=editor]', { timeout: 15000 });
+await p.waitForTimeout(2500);
+await p.screenshot({ path: out + '/ai-home-opened.png' });
+console.log('DESIGN', await p.evaluate(() => { const d = window.cream.editor.getState().design; return [d.title, d.width, d.height, d.pages[0].elements.length]; }));
+// Code widget keyless in the editor panel
+await p.evaluate(() => window.cream.editor.setState({ side: 'ai' }));
+await p.click('[data-testid=ai-mode-code]');
+await p.fill('[data-testid=ai-panel] [data-testid=ai-prompt]', 'a quiz about planets');
+await p.click('[data-testid=ai-panel] [data-testid=ai-generate]');
+await p.waitForSelector('[data-testid=ai-code-preview]', { timeout: 10000 });
+await p.waitForTimeout(800);
+await p.click('[data-testid=ai-code-use]');
+await p.waitForTimeout(800);
+await p.screenshot({ path: out + '/ai-code.png' });
+console.log('EMBED', await p.evaluate(() => window.cream.editor.getState().design.pages[0].elements.filter((e) => e.type === 'embed').length));
+// settings
+await p.goto('http://localhost:5400/#/settings/ai');
+await p.waitForSelector('[data-testid=ai-settings]', { timeout: 15000 });
+await p.fill('[data-testid=ai-key-anthropic]', 'sk-ant-invalid-test');
+await p.click('[data-testid=ai-test-anthropic]');
+await p.waitForSelector('.ai-status', { timeout: 20000 });
+await p.screenshot({ path: out + '/ai-settings.png' });
+console.log('STATUS', await p.$eval('.ai-status', (e) => e.textContent));
+await p.click('[data-testid=ai-clear-keys]');
+console.log('ERRORS', JSON.stringify(errs.slice(0, 10)));
+await b.close();

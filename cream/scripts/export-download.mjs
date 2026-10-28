@@ -1,0 +1,41 @@
+import fs from 'node:fs';
+import { launch, makeRichDesign } from './export-fixture.mjs';
+const out = process.argv[2];
+const only = process.argv[3]?.split(',');
+const { b, p, errs } = await launch();
+const id = await makeRichDesign(p);
+await p.goto('http://localhost:5400/#/design/' + id);
+await p.waitForSelector('[data-testid=editor]');
+await p.waitForTimeout(1500);
+const results = {};
+async function dl(type, setup) {
+  if (only && !only.includes(type)) return;
+  await p.evaluate(() => window.cream.editor.setState({ modal: 'download' }));
+  await p.waitForSelector('[data-testid=download-modal]');
+  await p.click('[data-testid=dl-filetype]');
+  await p.click('[data-testid=dl-type-' + type + ']');
+  if (setup) await setup();
+  if (type === 'png') await p.screenshot({ path: out + '/dl-modal.png' });
+  const t0 = Date.now();
+  const [d] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.click('[data-testid=dl-download]')]);
+  const path = out + '/' + type + '-' + d.suggestedFilename().replace(/ /g, '_');
+  await d.saveAs(path);
+  results[type] = { file: d.suggestedFilename(), size: fs.statSync(path).size, ms: Date.now() - t0 };
+  console.log(type, JSON.stringify(results[type]));
+  await p.waitForTimeout(400);
+}
+await dl('png', async () => {
+  await p.click('[data-testid=dl-pages]');
+  await p.click('[data-testid=dl-pages-current]');
+  await p.click('.xp-dd-list >> text=Done');
+});
+await dl('jpg');
+await dl('pdf');
+await dl('pdf-print', async () => p.click('[data-testid=dl-cropmarks]'));
+await dl('svg');
+await dl('pptx');
+await dl('gif');
+await dl('cream');
+await dl('mp4');
+console.log('ERRORS', JSON.stringify(errs.slice(0, 10)));
+await b.close();
